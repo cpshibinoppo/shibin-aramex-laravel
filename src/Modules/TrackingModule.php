@@ -3,7 +3,6 @@
 namespace Shibin\Aramex\Modules;
 
 use Shibin\Aramex\Config\AramexConfig;
-use Shibin\Aramex\DTO\TrackingRequest;
 use Shibin\Aramex\Support\SoapFactory;
 use Shibin\Aramex\Support\Validator;
 use Shibin\Aramex\Exceptions\AramexException;
@@ -14,7 +13,7 @@ class TrackingModule
         protected AramexConfig $config
     ) {}
 
-    public function track(array $shipments)
+    public function track(array $shipments, bool $lastUpdateOnly = false)
     {
         Validator::validate([
             'shipments' => $shipments
@@ -24,17 +23,37 @@ class TrackingModule
 
         $client = SoapFactory::client($this->config, 'tracking');
 
+        $clientInfo = $this->config->credentials;
+        if (array_key_exists('Source', $clientInfo) && is_null($clientInfo['Source'])) {
+            unset($clientInfo['Source']);
+        }
+
         $params = [
-            'ClientInfo' => $this->config->credentials,
-            'Shipments' => $shipments
+            'ClientInfo' => $clientInfo,
+
+            'Transaction' => [
+                'Reference1' => 'TrackShipment',
+                'Reference2' => '',
+                'Reference3' => '',
+                'Reference4' => '',
+                'Reference5' => '',
+            ],
+
+            // FIX: Wrap the array to match WSDL 'ArrayOfstring' definition
+            'Shipments' => [
+                'string' => $shipments
+            ],
+            
+            'GetLastTrackingUpdateOnly' => $lastUpdateOnly
         ];
 
         try {
             $response = $client->TrackShipments($params);
 
             if ($response->HasErrors) {
+                $errorMsg = $response->Notifications->Notification->Message ?? "Unknown Error";
                 throw new AramexException(
-                    "Tracking failed",
+                    "Tracking failed: " . $errorMsg,
                     (array)$response->Notifications
                 );
             }

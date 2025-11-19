@@ -16,6 +16,7 @@ class ShipmentModule
 
     public function create(Shipment $shipment)
     {
+        // 1. Validate Input
         Validator::validate([
             'shipping_date_time' => $shipment->shipping_date_time,
             'due_date' => $shipment->due_date,
@@ -30,20 +31,21 @@ class ShipmentModule
 
         $client = SoapFactory::client($this->config, 'shipping');
 
+        // 2. Sanitize ClientInfo (Remove 'Source' if null)
         $clientInfo = $this->config->credentials;
         if (array_key_exists('Source', $clientInfo) && is_null($clientInfo['Source'])) {
             unset($clientInfo['Source']);
         }
 
+        // 3. Prepare Payload
         $params = [
             'ClientInfo' => $clientInfo,
 
+            // ADDED: Required by Schema
             'Transaction' => [
-                'Reference1' => 'Shipment',
+                'Reference1' => 'CreateShipment',
                 'Reference2' => '',
-                'Reference3' => '',
-                'Reference4' => '',
-                'Reference5' => '',
+                // ...
             ],
 
             'Shipments' => [
@@ -58,7 +60,7 @@ class ShipmentModule
                     'Consignee' => [
                         'Reference1' => '',
                         'Reference2' => '',
-                        'AccountNumber' => '',
+                        'AccountNumber' => '', // Keep empty for non-account consignees
                         'PartyAddress' => $this->mapAddress($shipment->consignee),
                         'Contact' => $this->mapContact($shipment->consignee),
                     ],
@@ -72,42 +74,49 @@ class ShipmentModule
                     'PickupLocation' => $shipment->pickup_location,
                     'OperationsInstructions' => '',
                     'AccountingInstrcutions' => '',
+
+                    // DETAILS: Sequence is Critical here
                     'Details' => [
                         'Dimensions' => null,
-                        'ActualWeight' => ['Value' => $shipment->weight, 'Unit' => 'KG'],
+                        'ActualWeight' => [
+                            'Value' => $shipment->weight,
+                            'Unit' => 'KG',
+                        ],
                         'ChargeableWeight' => null,
                         'DescriptionOfGoods' => $shipment->description ?? 'General Goods',
                         'GoodsOriginCountry' => $shipment->shipper->country_code,
                         'NumberOfPieces' => $shipment->number_of_pieces,
-                        'ProductGroup' => $this->config->defaults['ProductGroup'],
-                        'ProductType' => $this->config->defaults['ProductType'],
+                        'ProductGroup' => $this->config->defaults['ProductGroup'] ?? 'EXP',
+                        'ProductType' => $this->config->defaults['ProductType'] ?? 'PPX',
                         'PaymentType' => $shipment->payment_type ?? $this->config->defaults['Payment'],
                         'PaymentOptions' => '',
                         'CustomsValueAmount' => null,
-                        'CashOnDeliveryAmount' => null,
+                        'CashOnDeliveryAmount' => $this->makeMoney($shipment->cash_on_delivery_amount, 'USD'),
                         'InsuranceAmount' => null,
                         'CashAdditionalAmount' => null,
                         'CashAdditionalAmountDescription' => '',
-                        'CollectAmount' => null,
+                        'CollectAmount' => $this->makeMoney($shipment->collect_amount, 'USD'),
                         'Services' => '',
                         'Items' => null,
                     ],
                 ],
             ],
-            'LabelInfo' => $this->config->defaults['LabelInfo'],
+
+            'LabelInfo' => $this->resolveLabelInfo(),
         ];
 
         try {
             $response = $client->CreateShipments($params);
 
             if ($response->HasErrors) {
+                // Handle Nested Errors safely
                 $errorMsg = "Unknown Error";
                 $notifications = $response->Shipments->ProcessedShipment->Notifications->Notification ?? null;
 
                 if ($notifications) {
                     $errorMsg = is_array($notifications) ? $notifications[0]->Message : $notifications->Message;
                 } else {
-
+                    // Fallback to top-level notification
                     $errorMsg = $response->Notifications->Notification->Message ?? $errorMsg;
                 }
 
@@ -155,5 +164,25 @@ class ShipmentModule
     {
         if (!$value || $value <= 0) return null;
         return ['Value' => $value, 'CurrencyCode' => $currency];
+    }
+    private function resolveLabelInfo()
+    {
+        // 1) If TEST → always return null
+        if (strtolower($this->config->env) === 'test') {
+            return null;
+        }
+
+        // 2) If LIVE user configured LabelInfo → use it
+        $configLabel = $this->config->defaults['LabelInfo'] ?? null;
+        if (is_array($configLabel)) {
+            return $configLabel;
+        }
+
+        // 3) For LIVE environment (and LabelInfo is null)
+        // Return SAFE Aramex defaults
+        return [
+            'ReportID'   => 9201,
+            'ReportType' => 'RPT',
+        ];
     }
 }

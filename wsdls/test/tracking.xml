@@ -248,7 +248,7 @@
     </wsdl:binding>
     <wsdl:service name="Service_1_0">
         <wsdl:port name="BasicHttpBinding_Service_1_0" binding="tns:BasicHttpBinding_Service_1_0">
-            <soap:address location="https://ws.aramex.net/ShippingAPI.V2/Tracking/Service_1_0.svc"/>
+            <soap:address location="https://ws.sbx.aramex.net/ShippingAPI/Tracking/Service_1_0.svc"/>
         </wsdl:port>
     </wsdl:service>
 </wsdl:definitions>

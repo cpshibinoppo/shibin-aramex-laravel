@@ -151,8 +151,9 @@ return [
      *		ReportType => “URL” to get report hosted on URL as PDF
      *					  “RPT” to get a streamed file
      */
-    'LabelInfo' => [
-        'ReportID'         => 9729,
-        'ReportType'    => 'RPT',
-    ],
+    // 'LabelInfo' => [
+    //     'ReportID'         => 9201,
+    //     'ReportType'    => 'URL',
+    // ],
+    'LabelInfo' => null,
 ];
