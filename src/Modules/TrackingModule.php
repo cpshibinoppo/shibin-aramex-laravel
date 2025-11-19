@@ -39,7 +39,6 @@ class TrackingModule
                 'Reference5' => '',
             ],
 
-            // FIX: Wrap the array to match WSDL 'ArrayOfstring' definition
             'Shipments' => [
                 'string' => $shipments
             ],

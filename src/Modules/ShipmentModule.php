@@ -129,6 +129,70 @@ class ShipmentModule
         }
     }
 
+    public function printLabel(string $shipmentNumber, ?int $reportId = null)
+    {
+        // 1. Validate Input
+        Validator::validate(['shipment_number' => $shipmentNumber], [
+            'shipment_number' => 'required|string'
+        ]);
+
+        $client = SoapFactory::client($this->config, 'shipping');
+
+        // 2. Sanitize ClientInfo
+        $clientInfo = $this->config->credentials;
+        if (array_key_exists('Source', $clientInfo) && is_null($clientInfo['Source'])) {
+            unset($clientInfo['Source']);
+        }
+
+        // 3. Determine Label Info (Smart Logic)
+        $labelInfo = $this->config->defaults['LabelInfo'] ?? [];
+
+        // Override ReportID if passed
+        if ($reportId) {
+            $labelInfo['ReportID'] = $reportId;
+        }
+
+        // SAFETY FIX: If config is missing keys, set defaults
+        if (empty($labelInfo['ReportID'])) $labelInfo['ReportID'] = 9729;
+        if (empty($labelInfo['ReportType'])) $labelInfo['ReportType'] = 'RPT';
+
+        // SANDBOX FIX: Force 'RPT' on Test Environment to avoid "Network Path" errors
+        if (strtolower($this->config->env) === 'test') {
+            $labelInfo['ReportType'] = 'RPT';
+        }
+
+        // 4. Prepare Payload
+        $params = [
+            'ClientInfo' => $clientInfo,
+
+            'Transaction' => [
+                'Reference1' => 'PrintLabel',
+                'Reference2' => $shipmentNumber,
+                'Reference3' => '', 
+                'Reference4' => '', 
+                'Reference5' => '',
+            ],
+
+            'ShipmentNumber' => $shipmentNumber,
+            'ProductGroup' => $this->config->defaults['ProductGroup'] ?? 'EXP',
+            'OriginEntity' => $this->config->credentials['AccountEntity'], 
+            
+            'LabelInfo' => $this->resolveLabelInfo(), // Now guaranteed to be valid
+        ];
+
+        try {
+            $response = $client->PrintLabel($params);
+
+            if ($response->HasErrors) {
+                $errorMsg = $response->Notifications->Notification->Message ?? "Unknown Error";
+                throw new AramexException("Print Label Failed: " . $errorMsg, (array)$response->Notifications);
+            }
+
+            return $response;
+        } catch (\SoapFault $e) {
+            throw new AramexException($e->getMessage());
+        }
+    }
     private function mapAddress($a)
     {
         return [
