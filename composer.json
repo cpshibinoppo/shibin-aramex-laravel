@@ -1,0 +1,34 @@
+{
+    "name": "shibin/aramex-laravel",
+    "description": "A clean, modern Laravel Aramex SDK with WSDL handling and DTO-based requests.",
+    "type": "library",
+    "require": {
+        "ext-soap": "*",
+        "illuminate/support": "^10.0 || ^11.0 || ^12.0",
+        "illuminate/validation": "^10.0 || ^11.0 || ^12.0",
+        "guzzlehttp/guzzle": "^7.10"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Shibin\\Aramex\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Shibin\\Aramex\\AramexServiceProvider"
+            ],
+            "aliases": {
+                "Aramex": "Shibin\\Aramex\\Facades\\Aramex"
+            }
+        }
+    },
+    "authors": [
+        {
+            "name": "cpshibin",
+            "email": "cpshibinoppo@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable"
+}
