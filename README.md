@@ -6,6 +6,7 @@ Designed to be simple enough for junior developers and powerful enough for produ
 <p align="center">
   <!-- <img src="https://img.shields.io/badge/Laravel-10.x%20%7C%2011.x-red?style=for-the-badge" /> -->
   <img src="https://img.shields.io/badge/PHP-8.1+-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/packagist/dt/shibin/aramex-laravel?style=for-the-badge&color=purple" alt="Total Downloads" />
   <img src="https://img.shields.io/badge/Status-Stable-brightgreen?style=for-the-badge" />
   <!-- <img src="https://img.shields.io/badge/Aramex-API-orange?style=for-the-badge" /> -->
 </p>
