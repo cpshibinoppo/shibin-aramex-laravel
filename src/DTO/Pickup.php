@@ -15,5 +15,8 @@ class Pickup
     public float $weight;
     public float $volume;
 
+    // Add this field
+    public string $reference1 = ''; 
+
     public string $status = 'Ready';
 }

@@ -3,7 +3,6 @@
 namespace Shibin\Aramex\Modules;
 
 use Shibin\Aramex\Config\AramexConfig;
-use Shibin\Aramex\Support\Validator;
 use Shibin\Aramex\Support\SoapFactory;
 use Shibin\Aramex\DTO\Pickup;
 use Shibin\Aramex\Exceptions\AramexException;
@@ -16,42 +15,46 @@ class PickupModule
 
     public function create(Pickup $pickup)
     {
-        // Validate input
-        Validator::validate([
-            'pickup_location' => $pickup->pickup_location,
-            'pickup_date' => $pickup->pickup_date,
-            'ready_time' => $pickup->ready_time,
-            'last_pickup_time' => $pickup->last_pickup_time,
-            'closing_time' => $pickup->closing_time,
-            'weight' => $pickup->weight,
-            'volume' => $pickup->volume,
-            'status' => $pickup->status,
-        ], [
-            'pickup_location' => 'required|string',
-            'pickup_date' => 'required',
-            'ready_time' => 'required',
-            'last_pickup_time' => 'required',
-            'closing_time' => 'required',
-            'weight' => 'required|numeric',
-            'volume' => 'required|numeric',
-            'status' => 'required|in:Ready,Pending'
-        ]);
-
         $client = SoapFactory::client($this->config, 'shipping');
-
         $address = $pickup->address;
+
+        // TEST ENV FIX: Aramex allows pickups ONLY from Jordan (JO)
+        if ($this->config->env === 'test' && $address->country_code !== 'JO') {
+            throw new AramexException("In TEST mode, pickups can ONLY be created from Jordan (JO).");
+        }
+
+        // Required SOAP formatted dates
+        $date = fn($d) => date('Y-m-d\TH:i:s', is_numeric($d) ? $d : strtotime($d));
+
+        // Use user reference or auto-generate one
+        $reference = $pickup->reference1 ?: 'PK-' . time();
 
         $params = [
             'ClientInfo' => $this->config->credentials,
+
+            'Transaction' => [
+                'Reference1' => $reference,
+            ],
+
             'Pickup' => [
+                'Reference1' => $reference,
+                'PickupLocation' => $pickup->pickup_location,
+                'Status' => $pickup->status,
+
+                'PickupDate' => $date($pickup->pickup_date),
+                'ReadyTime' => $date($pickup->ready_time),
+                'LastPickupTime' => $date($pickup->last_pickup_time),
+                'ClosingTime' => $date($pickup->closing_time),
+
                 'PickupAddress' => [
                     'Line1' => $address->line1,
-                    'Line2' => $address->line2,
-                    'Line3' => $address->line3,
+                    'Line2' => $address->line2 ?? '',
+                    'Line3' => $address->line3 ?? '',
                     'City'  => $address->city,
                     'CountryCode' => $address->country_code,
-                    'PostCode' => $address->zip_code,
+                    'PostCode' => $address->zip_code ?? '',
                 ],
+
                 'PickupContact' => [
                     'PersonName' => $address->name,
                     'CompanyName' => $address->name,
@@ -59,43 +62,49 @@ class PickupModule
                     'CellPhone' => $address->cell_phone,
                     'EmailAddress' => $address->email,
                 ],
-                'PickupLocation' => $pickup->pickup_location,
-                'PickupDate' => $pickup->pickup_date,
-                'ReadyTime' => $pickup->ready_time,
-                'LastPickupTime' => $pickup->last_pickup_time,
-                'ClosingTime' => $pickup->closing_time,
-                'Status' => $pickup->status,
+
                 'PickupItems' => [
                     'PickupItemDetail' => [
-                        'ProductGroup' => $this->config->defaults['ProductGroup'],
-                        'ProductType' => $this->config->defaults['ProductType'],
-                        'Payment' => $this->config->defaults['Payment'],
+                        'ProductGroup' => 'EXP',    // Must be EXP for international
+                        'ProductType'  => 'PPX',    // Must be PPX
+                        'Payment' => 'P',           // Prepaid
                         'NumberOfPieces' => 1,
+                        'NumberOfShipments' => 1,
+
                         'ShipmentWeight' => [
                             'Value' => $pickup->weight,
-                            'Unit' => 'Kg'
+                            'Unit' => 'KG'
                         ],
+
                         'ShipmentVolume' => [
                             'Value' => $pickup->volume,
-                            'Unit' => 'Cm3'
+                            'Unit' => 'CM3'
                         ],
-                    ],
-                ],
+                    ]
+                ]
             ],
-            'LabelInfo' => $this->config->defaults['LabelInfo'],
+
+            // LabelInfo is NOT ALLOWED for create pickup in TEST
+            'LabelInfo' => null,
         ];
 
         try {
             $response = $client->CreatePickup($params);
 
             if ($response->HasErrors) {
+                $notifications = $response->Notifications->Notification ?? [];
+                $arr = is_array($notifications) ? $notifications : [$notifications];
+
+                $errs = array_map(fn($n) => $n->Message, $arr);
+
                 throw new AramexException(
-                    "Pickup creation failed",
-                    (array)$response->Notifications
+                    "Pickup creation failed: " . implode(', ', $errs),
+                    $errs
                 );
             }
 
             return $response;
+
         } catch (\SoapFault $e) {
             throw new AramexException($e->getMessage());
         }
