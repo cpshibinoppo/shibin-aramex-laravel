@@ -1,6 +1,17 @@
 {
     "name": "shibin/aramex-laravel",
     "description": "A clean, modern Laravel Aramex SDK with WSDL handling and DTO-based requests.",
+    "keywords": [
+        "laravel",
+        "aramex",
+        "shipping",
+        "aramex api",
+        "aramex laravel",
+        "laravel aramex",
+        "shipment",
+        "tracking",
+        "pickup"
+    ],
     "type": "library",
     "require": {
         "ext-soap": "*",
